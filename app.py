@@ -1,9 +1,10 @@
+import os
 from flask import Flask, render_template, request, redirect, jsonify
 from utils.db import db
-from models.ipl_player import *  # Ensure this matches your file structure
+from models.ipl_player import IPLPlayer  # Ensure correct import
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///IPL.db'  # Updated database for IPL players
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////tmp/IPL.db'  # Fix SQLite issue for Render
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db.init_app(app)
@@ -25,25 +26,19 @@ def contact():
         email = request.form.get('email').strip()
         message = request.form.get('message').strip()
 
-        # Validate the inputs
         if not name or not email or not message:
             return jsonify({"status": "error", "message": "All fields are required."}), 400
 
-        # Save the data to the database
         new_contact = Contact(name=name, email=email, message=message)
         db.session.add(new_contact)
         try:
             db.session.commit()
             return jsonify({"status": "success", "message": "Thank you for contacting us!"})
-        except Exception as e:
+        except Exception:
             db.session.rollback()
             return jsonify({"status": "error", "message": "An error occurred while saving your data."}), 500
 
-    # Render the contact form for GET request
     return render_template('contact.html')
-
-
-
 
 
 @app.route('/matches')
@@ -51,15 +46,10 @@ def matches():
     matches = Matches.query.all()
     return render_template('matches.html', matches=matches)
 
-@app.route('/matches')
-def matches_page():
-    return render_template('matches.html')
 
 @app.route('/news')
 def news():
     return render_template('news.html')
-
-
 
 
 @app.route('/players')
@@ -67,16 +57,16 @@ def players():
     players = IPLPlayer.query.all()
     return render_template('players_list.html', players=players)
 
+
 @app.route('/points_table')
 def points_table():
     matches = Matches.query.all()
     points_table = {}
 
     for match in matches:
-        if match.team1 not in points_table:
-            points_table[match.team1] = {'matches_played': 0, 'wins': 0, 'losses': 0, 'points': 0}
-        if match.team2 not in points_table:
-            points_table[match.team2] = {'matches_played': 0, 'wins': 0, 'losses': 0, 'points': 0}
+        for team in [match.team1, match.team2]:
+            if team not in points_table:
+                points_table[team] = {'matches_played': 0, 'wins': 0, 'losses': 0, 'points': 0}
 
         points_table[match.team1]['matches_played'] += 1
         points_table[match.team2]['matches_played'] += 1
@@ -90,16 +80,9 @@ def points_table():
             points_table[match.team2]['points'] += 2
             points_table[match.team1]['losses'] += 1
 
-    sorted_points_table = sorted(
-        points_table.items(),
-        key=lambda x: (-x[1]['points'], -x[1]['wins'])
-    )
+    sorted_points_table = sorted(points_table.items(), key=lambda x: (-x[1]['points'], -x[1]['wins']))
 
-    # Pass the sorted table and its index to the template
     return render_template('points_table.html', points_table=sorted_points_table)
-
-
-
 
 
 @app.route('/submit', methods=['POST'])
@@ -111,36 +94,21 @@ def submit():
         matches_played=request.form['matches_played'],
         runs_scored=request.form.get('runs_scored', 0),
         wickets_taken=request.form.get('wickets_taken', 0),
-        image=request.form.get('image', 0)
+        image=request.form.get('image', '')
     )
     db.session.add(player)
     db.session.commit()
     return redirect('/players')
 
 
-
-# @app.route('/update/<int:player_id>', methods=['POST'])
-# def update_player(player_id):
-#     player = IPLPlayer.query.get_or_404(player_id)
-#     player.player_name = request.form['player_name']
-#     player.team = request.form['team']
-#     player.matches_played = request.form['matches_played']
-#     player.runs_scored = request.form['runs_scored']
-#     player.wickets_taken = request.form['wickets_taken']
-#     db.session.commit()
-#     return jsonify({'message': 'Player updated successfully'})
-
 @app.route('/update/<int:player_id>', methods=['PUT'])
 def update_player(player_id):
     player = IPLPlayer.query.get_or_404(player_id)
-
-    # Parse JSON data from the request
     data = request.get_json()
 
     if not data:
         return jsonify({'error': 'No data provided'}), 400
-    
-    # Update player details
+
     player.player_name = data.get('player_name', player.player_name)
     player.team = data.get('team', player.team)
     player.matches_played = data.get('matches_played', player.matches_played)
@@ -148,9 +116,7 @@ def update_player(player_id):
     player.wickets_taken = data.get('wickets_taken', player.wickets_taken)
     player.image = data.get('image', player.image)
 
-    # Commit changes to the database
     db.session.commit()
-
     return jsonify({'message': 'Player updated successfully'})
 
 
@@ -159,19 +125,21 @@ def delete_player(player_id):
     player = IPLPlayer.query.get(player_id)
     if not player:
         return jsonify({'message': 'Player not found'}), 404
+
     try:
         db.session.delete(player)
         db.session.commit()
         return jsonify({'message': 'Player deleted successfully'}), 200
     except Exception as e:
         db.session.rollback()
-        return jsonify({'message': f'An error occurred: {e}'}),500
+        return jsonify({'message': f'An error occurred: {e}'}), 500
 
 
 @app.route('/teams', methods=['GET'])
 def view_teams():
     teams = Teams.query.all()
     return render_template('teams.html', teams=teams)
+
 
 @app.route('/submit_team', methods=['POST'])
 def submit_team():
@@ -184,6 +152,7 @@ def submit_team():
     db.session.commit()
     return redirect('/teams')
 
+
 @app.route('/update_team/<int:team_id>', methods=['POST'])
 def update_team(team_id):
     team = Teams.query.get_or_404(team_id)
@@ -193,11 +162,13 @@ def update_team(team_id):
     db.session.commit()
     return jsonify({'message': 'Team updated successfully'})
 
+
 @app.route('/delete_team/<int:team_id>', methods=['DELETE'])
 def delete_team(team_id):
     team = Teams.query.get(team_id)
     if not team:
         return jsonify({'message': 'Team not found'}), 404
+
     try:
         db.session.delete(team)
         db.session.commit()
@@ -209,10 +180,11 @@ def delete_team(team_id):
 
 @app.route('/team/<team_name>', methods=['GET'])
 def team_details(team_name):
-    # Get all players from the specified team
     players = IPLPlayer.query.filter_by(team=team_name).all()
     return render_template('team_details.html', team_name=team_name, players=players)
 
 
+# ✅ Ensure proper deployment on Render
 if __name__ == '__main__':
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # Dynamic port handling
+    app.run(host='0.0.0.0', port=port)
