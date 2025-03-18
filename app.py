@@ -51,7 +51,6 @@ def matches():
     matches = Matches.query.all()
     return render_template('matches.html', matches=matches)
 
-
 @app.route('/matches')
 def matches_page():
     return render_template('matches.html')
