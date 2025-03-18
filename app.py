@@ -19,6 +19,11 @@ def index():
     players = IPLPlayer.query.all()
     return render_template('index.html', content=players)
 
+
+@app.route('/hello')
+def index():
+    return "hello world"
+
 @app.route('/contact', methods=['GET', 'POST'])
 def contact():
     if request.method == 'POST':
